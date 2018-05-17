@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">IOTDom</string>
+    <string name="log_hello">Witamy w aplikacji do zarządzania domem. Podaj swoje dane logowania:</string>
+    <string name="login">Login</string>
+    <string name="password">Hasło</string>
+    <string name="login_button_text">Zaloguj</string>
+</resources>
