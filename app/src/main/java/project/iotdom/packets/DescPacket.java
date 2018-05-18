@@ -1,5 +1,7 @@
 package project.iotdom.packets;
 
+import java.nio.charset.StandardCharsets;
+
 public class DescPacket extends AbstractPacket {
 
     private byte deviceClass;

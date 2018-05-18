@@ -2,18 +2,18 @@ package project.iotdom.packets;
 
 public class ValPacket extends AbstractPacket {
 
-    private short serviceID;
+    private byte serviceID;
     private float value;
     private int unixTimestamp;
 
-    public ValPacket(short serviceID, float value, int unixTimestamp) {
+    public ValPacket(byte serviceID, float value, int unixTimestamp) {
         this.serviceID = serviceID;
         this.value = value;
         this.unixTimestamp = unixTimestamp;
         this.packetHeader = HEADER_VAL;
     }
 
-    public short getServiceID() {
+    public byte getServiceID() {
         return serviceID;
     }
 

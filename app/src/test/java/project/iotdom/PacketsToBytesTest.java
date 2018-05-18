@@ -3,6 +3,7 @@ package project.iotdom;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -155,7 +156,7 @@ public class PacketsToBytesTest {
     public void setPacketTest() {
         SetPacket setPacket = new SetPacket((byte)0xFF,1.5f);
         byte[] packetBytes = setPacket.getPacketBytes();
-        ByteBuffer buff = ByteBuffer.allocate(4).putFloat(1.5f);
+        ByteBuffer buff = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat(1.5f);
         byte[] floatBytes = buff.array();
 
         assertEquals(6,packetBytes.length);

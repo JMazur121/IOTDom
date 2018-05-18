@@ -1,6 +1,7 @@
 package project.iotdom.packets;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 public class PacketsFactory {
@@ -21,18 +22,20 @@ public class PacketsFactory {
                 byte deviceClass = packetBytes.get();
                 if (deviceClass > 3)
                     return null;
-                int nameLength = capacity - 13;
+                int nameLength = capacity - 14;
                 byte[] nameBytes = new byte[nameLength];
                 packetBytes.get(nameBytes,0,nameLength);
                 String name = new String(nameBytes, StandardCharsets.US_ASCII);
                 byte[] unitNameBytes = new byte[4];
                 packetBytes.get(unitNameBytes,0,4);
                 String unitName = new String(unitNameBytes, StandardCharsets.US_ASCII);
+                packetBytes.order(ByteOrder.LITTLE_ENDIAN);
                 float minValue = packetBytes.getFloat();
                 float maxValue = packetBytes.getFloat();
                 return new DescPacket(deviceClass,name,unitName,minValue,maxValue);
             }
             case AbstractPacket.HEADER_VAL: {
+                packetBytes.order(ByteOrder.LITTLE_ENDIAN);
                 byte serviceID = packetBytes.get();
                 float value = packetBytes.getFloat();
                 int unixTimestamp = packetBytes.getInt();
