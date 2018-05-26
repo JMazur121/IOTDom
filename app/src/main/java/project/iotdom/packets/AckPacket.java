@@ -20,5 +20,4 @@ public class AckPacket extends AbstractPacket {
         packetBytes[1] = val;
         return packetBytes;
     }
-
 }

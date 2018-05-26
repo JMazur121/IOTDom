@@ -4,4 +4,7 @@
     <string name="login">Login</string>
     <string name="password">Hasło</string>
     <string name="login_button_text">Zaloguj</string>
+    <string name="servConfError">Nie można odczytać pliku konfiguracyjnego</string>
+    <string name="inetAdressError">Nie można odczytać adresu sieciowego z pliku konfiguracyjnego</string>
+    <string name="portError">Niepoprawna wartość portu</string>
 </resources>

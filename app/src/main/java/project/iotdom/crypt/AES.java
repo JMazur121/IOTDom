@@ -31,9 +31,7 @@ public class AES {
         secretKey = new SecretKeySpec(key, "AES");
         try {
             cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (NoSuchPaddingException e) {
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             e.printStackTrace();
         }
     }
@@ -53,20 +51,37 @@ public class AES {
      * @param toEncrypt array of bytes to encrypt
      * @return encrypted bytes + IV
      */
-    public byte[] encryptBytes(byte[] toEncrypt) throws InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, ShortBufferException, IllegalBlockSizeException {
+    public byte[] encryptBytes(byte[] toEncrypt) {
         secureRandom.nextBytes(iv);
         ivps = new IvParameterSpec(iv);
-        cipher.init(Cipher.ENCRYPT_MODE,secretKey,ivps);
+        try {
+            cipher.init(Cipher.ENCRYPT_MODE,secretKey,ivps);
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
+            e.printStackTrace();
+        }
         byte[] encrypted = new byte[cipher.getOutputSize(toEncrypt.length) + 16];
-        cipher.doFinal(toEncrypt,0,toEncrypt.length,encrypted,0);
+        try {
+            cipher.doFinal(toEncrypt,0,toEncrypt.length,encrypted,0);
+        } catch (ShortBufferException | IllegalBlockSizeException | BadPaddingException e) {
+            e.printStackTrace();
+        }
         System.arraycopy(iv,0,encrypted,encrypted.length-16,16);
         return encrypted;
     }
 
-    public byte[] decryptBytes(byte[] toDecrypt, byte[] dec_iv) throws InvalidAlgorithmParameterException, InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
+    public byte[] decryptBytes(byte[] toDecrypt, byte[] dec_iv) {
         ivps = new IvParameterSpec(dec_iv);
-        cipher.init(Cipher.DECRYPT_MODE,secretKey,ivps);
-        return cipher.doFinal(toDecrypt);
+        try {
+            cipher.init(Cipher.DECRYPT_MODE,secretKey,ivps);
+        } catch (InvalidKeyException | InvalidAlgorithmParameterException e) {
+            e.printStackTrace();
+        }
+        try {
+            return cipher.doFinal(toDecrypt);
+        } catch (IllegalBlockSizeException | BadPaddingException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     public void generateNewKey() {
