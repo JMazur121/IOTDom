@@ -22,7 +22,7 @@ public class ClientSocket {
     public ClientSocket(InetAddress address, int port) {
         this.address = address;
         this.port = port;
-        this.socket = new Socket();
+        this.socket = createSocket();
         this.isConnected = false;
     }
 
@@ -37,20 +37,34 @@ public class ClientSocket {
         return isConnected;
     }
 
-    public int readFromSocket(byte[] destination, int offset, int bytesToRead) throws IOException {
-        socket.setSoTimeout(readTimeout);
-        int bytes = inputStream.read(destination,offset,bytesToRead);
+    public int readFromSocket(byte[] destination, int offset, int bytesToRead) {
+        int bytes = -1;
+        try {
+            socket.setSoTimeout(readTimeout);
+            bytes = inputStream.read(destination,offset,bytesToRead);
+        } catch (Exception e) { }
         return bytes;
     }
 
-    public void writeToSocket(byte[] bytesToWrite) throws IOException {
-        outputStream.write(bytesToWrite);
-        outputStream.flush();
+    public boolean writeToSocket(byte[] bytesToWrite) {
+        try {
+            outputStream.write(bytesToWrite);
+            outputStream.flush();
+        } catch (Exception e) {
+            return false;
+        }
+        return true;
     }
 
-    public void close() throws IOException {
-        inputStream.close();
-        outputStream.close();
-        socket.close();
+    public void close() {
+        try {
+            inputStream.close();
+            outputStream.close();
+            socket.close();
+        } catch (Exception e) {}
+    }
+
+    protected Socket createSocket() {
+        return new Socket();
     }
 }

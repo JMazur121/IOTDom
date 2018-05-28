@@ -1,5 +1,7 @@
 package project.iotdom.packets;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 public class DescPacket extends AbstractPacket {
@@ -41,6 +43,14 @@ public class DescPacket extends AbstractPacket {
 
     @Override
     public byte[] getPacketBytes() {
-        return new byte[0];
+        ByteBuffer buffer = ByteBuffer.allocate(1+1+humanReadableName.length()+(3*4));
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        buffer.put(HEADER_DESC);
+        buffer.put(deviceClass);
+        buffer.put(humanReadableName.getBytes(StandardCharsets.US_ASCII));
+        buffer.put(unitName.getBytes(StandardCharsets.US_ASCII));
+        buffer.putFloat(minValue);
+        buffer.putFloat(maxValue);
+        return buffer.array();
     }
 }

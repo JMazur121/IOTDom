@@ -7,4 +7,10 @@
     <string name="servConfError">Nie można odczytać pliku konfiguracyjnego</string>
     <string name="inetAdressError">Nie można odczytać adresu sieciowego z pliku konfiguracyjnego</string>
     <string name="portError">Niepoprawna wartość portu</string>
+    <string name="connectionTimeout">Serwer nie odpowiedział na próbę połączenia w wyznaczonym czasie</string>
+    <string name="connectionError">Wystąpił błąd w trakcie nawiązywania połączenia z serwerem</string>
+    <string name="writingError">Bład w trakcie przesyłania danych do serwera</string>
+    <string name="serverResponseError">Odebrano niepoprawne dane. Połączenie zakończone.</string>
+    <string name="servChallengeError">Nie udało się rozpoznać serwera</string>
+    <string name="logInfoError">Login lub hasło przekracza dozwoloną długość (30 znaków)</string>
 </resources>
