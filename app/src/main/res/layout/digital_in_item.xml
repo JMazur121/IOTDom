@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/digitalInName"
+        android:layout_width="match_parent"
+        android:background="@drawable/back"
+        android:layout_height="wrap_content" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal">
+
+        <Switch
+            android:id="@+id/digitalInCurVal"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="4"
+            android:clickable="false"
+            android:showText="true"
+            android:textOff="@string/off"
+            android:textOn="@string/on" />
+
+        <Button
+            android:id="@+id/digitalInReadButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:onClick="readButtonHandler"
+            android:text="@string/read" />
+
+    </LinearLayout>
+
+</LinearLayout>

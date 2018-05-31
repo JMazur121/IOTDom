@@ -9,6 +9,10 @@ public class SSIDPacket extends AbstractPacket {
         packetHeader = HEADER_SSID;
     }
 
+    public byte getSsid() {
+        return ssid;
+    }
+
     @Override
     public byte[] getPacketBytes() {
         byte[] bytes = new byte[2];

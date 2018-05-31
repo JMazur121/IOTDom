@@ -13,4 +13,14 @@
     <string name="serverResponseError">Odebrano niepoprawne dane. Połączenie zakończone.</string>
     <string name="servChallengeError">Nie udało się rozpoznać serwera</string>
     <string name="logInfoError">Login lub hasło przekracza dozwoloną długość (30 znaków)</string>
+    <string name="getServices">Pobierz listę usług</string>
+    <string name="refresh">Odśwież stan usług</string>
+    <string name="logout">Wyloguj</string>
+    <string name="read">Odczytaj</string>
+    <string name="set">Ustaw</string>
+    <string name="on">Aktywne</string>
+    <string name="off">Nieaktywne</string>
+    <string name="toSet">Wartość do ustawienia</string>
+    <string name="maxValue">Wartość maksymalna</string>
+    <string name="minValue">Wartość minimalna</string>
 </resources>

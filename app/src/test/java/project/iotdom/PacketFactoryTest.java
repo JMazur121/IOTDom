@@ -51,9 +51,10 @@ public class PacketFactoryTest {
 
     @Test
     public void descCreationTest() {
-        ByteBuffer buffer = ByteBuffer.allocate(19).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.allocate(20).order(ByteOrder.LITTLE_ENDIAN);
         buffer.put(AbstractPacket.HEADER_DESC);
         buffer.put((byte)0x01);
+        buffer.put((byte)0x05);
         byte[] nameBytes = "nazwa".getBytes(StandardCharsets.US_ASCII);
         byte[] unitNameBytes = "gram".getBytes(StandardCharsets.US_ASCII);
         buffer.put(nameBytes);
@@ -70,6 +71,7 @@ public class PacketFactoryTest {
 
         assertEquals(AbstractPacket.HEADER_DESC,fromFactory.getPacketHeader());
         assertEquals((byte)0x01,fromFactory.getDeviceClass());
+        assertEquals(fromFactory.getServiceID(), (byte)0x05);
         assertEquals("nazwa",fromFactory.getHumanReadableName());
         assertEquals("gram",fromFactory.getUnitName());
         assertEquals(0.5f,fromFactory.getMinValue(),0.00001f);

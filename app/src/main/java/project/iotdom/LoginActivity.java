@@ -1,7 +1,8 @@
 package project.iotdom;
 
 import android.content.Context;
-import android.content.DialogInterface;
+import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
@@ -13,18 +14,12 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
-import android.widget.Toast;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import project.iotdom.connection.AbstractMessage;
 import project.iotdom.connection.ClientSocket;
@@ -34,17 +29,23 @@ import project.iotdom.crypt.AES;
 import project.iotdom.crypt.RSA;
 import project.iotdom.packets.AbstractPacket;
 import project.iotdom.packets.ChallPacket;
+import project.iotdom.packets.ChallRespPacket;
 import project.iotdom.packets.KeyPacket;
 import project.iotdom.packets.LogPacket;
+import project.iotdom.packets.SSIDPacket;
 
 public class LoginActivity extends AppCompatActivity {
 
-    private Handler handler;
+    public static final String PASS_SSID = "SSID_RECEIVED";
+    public static final String PASS_HOST = "HOST_ADDRESS";
+    public static final String PASS_PORT = "PORT_NUMBER";
+
     private Button sendButton;
     private EditText loginField;
     private EditText passwordField;
     private ProgressBar bar;
     final Context context = this;
+    private Handler handler = new Handler();
     private InetAddress adress = null;
     private int portNumber;
     private Thread loginThread;
@@ -54,13 +55,13 @@ public class LoginActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-        handler = new Handler(context.getMainLooper());
+
         sendButton = (Button)findViewById(R.id.loginButton);
         loginField = (EditText)findViewById(R.id.loginEntry);
         passwordField = (EditText)findViewById(R.id.passwordEntry);
         bar = (ProgressBar)findViewById(R.id.progressBar);
         sendButton.setEnabled(false);
-
+        
         passwordField.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
@@ -100,6 +101,8 @@ public class LoginActivity extends AppCompatActivity {
                 }
                 loginThread = new Thread(new LoginTask(loginField.getText().toString(),passwordField.getText().toString()));
                 loginThread.start();
+                //AsyncLoginTask task = new AsyncLoginTask();
+                //task.execute(loginField.getText().toString(),passwordField.getText().toString());
             }
         });
     }
@@ -107,11 +110,15 @@ public class LoginActivity extends AppCompatActivity {
     private void onLogging() {
         bar.setVisibility(View.VISIBLE);
         sendButton.setEnabled(false);
+        loginField.setEnabled(false);
+        passwordField.setEnabled(false);
     }
 
     private void afterLogin() {
         bar.setVisibility(View.INVISIBLE);
         sendButton.setEnabled(true);
+        loginField.setEnabled(true);
+        passwordField.setEnabled(true);
     }
 
     private void showAlert(String message, String title) {
@@ -156,8 +163,6 @@ public class LoginActivity extends AppCompatActivity {
     class LoginTask implements Runnable {
 
         ClientSocket clientSocket;
-        private static final int challRespLength = 4 + 1 + 257;
-        private static final int ackRespLength = 4 + 1 + 32;
         String login, password;
 
         public LoginTask(String login, String password) {
@@ -165,12 +170,11 @@ public class LoginActivity extends AppCompatActivity {
             this.password = password;
         }
 
-
-        //todo
         @Override
         public void run() {
-            handler.post(() -> onLogging());
+            handler.post(LoginActivity.this::onLogging);
             clientSocket = new ClientSocket(adress,portNumber);
+
             try {
                 clientSocket.connect();
             } catch (Exception e) {
@@ -182,16 +186,33 @@ public class LoginActivity extends AppCompatActivity {
                 }
                 return;
             }
+
             if (challengeExchange()) {
                 KeyPacket keyPacket = new KeyPacket(AES.getInstance().getKey());
                 AbstractMessage msg = MessageProvider.buildMessage(keyPacket,(byte)0);
                 if (clientSocket.writeToSocket(msg.getBytes())) {
-                    ByteBuffer buffer = MessageReceiver.receiveBytes(clientSocket,ackRespLength);
-                    if (buffer == null) {
+                    AbstractPacket packet = MessageReceiver.decryptedPacket(clientSocket);
+                    if ((packet == null) || (packet.getPacketHeader() != AbstractPacket.HEADER_ACK)) {
                         cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędne dane");
                         return;
                     }
-                }
+                    //send login data
+                    msg = MessageProvider.buildMessage(buildLogPacket(),(byte)0);
+                    if (clientSocket.writeToSocket(msg.getBytes())) {
+                        packet = MessageReceiver.decryptedPacket(clientSocket);
+                        if ((packet == null) || (packet.getPacketHeader() != AbstractPacket.HEADER_SSID)) {
+                            cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędne dane");
+                            return;
+                        }
+                        //data is fine, open new Activity
+                        clientSocket.close();
+                        handler.post(LoginActivity.this::afterLogin);
+                        OpenServicesActivity servicesActivity = new OpenServicesActivity((SSIDPacket) packet);
+                        handler.post(servicesActivity);
+                    }//writing error
+                }//writing error
+                cleanAfterError(getResources().getString(R.string.writingError),"Błąd wysyłania");
+                return;
             }
             //chalenge error
             cleanAfterError(getResources().getString(R.string.servChallengeError),"Błąd serwera");
@@ -199,36 +220,45 @@ public class LoginActivity extends AppCompatActivity {
 
         private void cleanAfterError(String message, String title) {
             clientSocket.close();
-            handler.post(() -> afterLogin());
             handler.post(new AlertRun(message,title));
+            handler.post(LoginActivity.this::afterLogin);
         }
 
         private LogPacket buildLogPacket() {
-            LogPacket packet = new LogPacket(login,password);
-            return packet;
+            return new LogPacket(login,password);
         }
 
         private boolean challengeExchange() {
             AbstractPacket challenge = new ChallPacket();
             AbstractMessage msg = MessageProvider.buildMessage(challenge,(byte)0);
             if (clientSocket.writeToSocket(msg.getBytes())) {
-                ByteBuffer buffer = MessageReceiver.receiveBytes(clientSocket,challRespLength);
-                if (buffer == null) {
+                AbstractPacket packet = MessageReceiver.plainPacket(clientSocket);
+                if ((packet == null) || (packet.getPacketHeader() != AbstractPacket.HEADER_CHALL_RESP)) {
                     handler.post(new AlertRun(getResources().getString(R.string.serverResponseError),"Błędna odpowiedź"));
                     return false;
                 }
-                int plainLength = buffer.getInt();
-                byte encryptionInfo = buffer.get();
-                if (plainLength != 257 || encryptionInfo != 0x00) {
-                    handler.post(new AlertRun(getResources().getString(R.string.serverResponseError),"Błędna odpowiedź"));
-                    return false;
-                }
-                byte[] challResp = new byte[257];
-                return RSA.getInstance().verifySign(challResp);
+                return RSA.getInstance().verifySign(packet.getPacketBytes());
             }
             else {
                 handler.post(new AlertRun(getResources().getString(R.string.writingError), "Błąd wysyłania"));
                 return false;
+            }
+        }
+
+        public class OpenServicesActivity implements Runnable {
+            private SSIDPacket packet;
+
+            public OpenServicesActivity(SSIDPacket packet) {
+                this.packet = packet;
+            }
+
+            @Override
+            public void run() {
+                Intent intent = new Intent(context,ServicesActivity.class);
+                intent.putExtra(PASS_SSID, packet.getSsid());
+                intent.putExtra(PASS_HOST, adress.getHostAddress());
+                intent.putExtra(PASS_PORT, portNumber);
+                startActivity(intent);
             }
         }
 

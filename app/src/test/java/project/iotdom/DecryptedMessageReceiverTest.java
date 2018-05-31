@@ -155,7 +155,7 @@ public class DecryptedMessageReceiverTest {
 
     @Test
     public void givenDescMessageAndDescPacketReturned() {
-        DescPacket descPacket = new DescPacket((byte)0x03,"Nazwa","Unit",2.5f,10f);
+        DescPacket descPacket = new DescPacket((byte)0x03, (byte)0x05,"Nazwa","Unit",2.5f,10f);
         byte[] packetBytes = descPacket.getPacketBytes();
         ByteBuffer buffer = ByteBuffer.allocate(5 + AES.getLengthWithPKCSPadding(packetBytes.length)+16);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
@@ -193,6 +193,8 @@ public class DecryptedMessageReceiverTest {
         DescPacket descPacket1 = (DescPacket)abstractPacket;
 
         assertEquals(descPacket.getDeviceClass(),(byte)0x03);
+
+        assertEquals(descPacket.getServiceID(), (byte)0x05);
 
         assertTrue(descPacket1.getHumanReadableName().equals("Nazwa"));
 

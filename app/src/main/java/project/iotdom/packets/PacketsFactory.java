@@ -31,12 +31,13 @@ public class PacketsFactory {
                 }
                 //length of DESC can be arbitrary, but shouldn't be smaller than 15 bytes
                 case AbstractPacket.HEADER_DESC: {
-                    if (received < 15)
+                    if (received < 16)
                         return null;
                     byte deviceClass = packetBytes.get();
                     if (byteToUnsignedInt(deviceClass) > 3)
                         return null;
-                    int nameLength = received - 14;
+                    byte serviceID = packetBytes.get();
+                    int nameLength = received - 15;
                     byte[] nameBytes = new byte[nameLength];
                     packetBytes.get(nameBytes, 0, nameLength);
                     String name = new String(nameBytes, StandardCharsets.US_ASCII);
@@ -46,7 +47,7 @@ public class PacketsFactory {
                     packetBytes.order(ByteOrder.LITTLE_ENDIAN);
                     float minValue = packetBytes.getFloat();
                     float maxValue = packetBytes.getFloat();
-                    return new DescPacket(deviceClass, name, unitName, minValue, maxValue);
+                    return new DescPacket(deviceClass, serviceID, name, unitName, minValue, maxValue);
                 }
                 case AbstractPacket.HEADER_VAL: {
                     if (received == AbstractPacket.expectedLength(AbstractPacket.HEADER_VAL)) {
