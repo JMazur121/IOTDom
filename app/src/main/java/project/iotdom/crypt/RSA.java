@@ -9,8 +9,15 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 
 import project.iotdom.R;
 
@@ -44,13 +51,30 @@ public class RSA {
         publicKey = kf.generatePublic(encodedKeySpec);
     }
 
-    public byte[] encryptData(byte[] toEncrypt, int offset) {
-        byte[] encryptedData = new byte[256];
-        System.arraycopy(toEncrypt,offset,encryptedData,0,toEncrypt.length-offset);
-        return encryptedData;
+    public byte[] encryptData(byte[] toEncrypt, int outputOffset) {
+        Cipher encryptCipher = null;
+        try {
+            encryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            encryptCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+        } catch (Exception e) {}
+        byte[] encrypted = new byte[encryptCipher.getOutputSize(toEncrypt.length)];
+        try {
+            encryptCipher.doFinal(toEncrypt, 0, toEncrypt.length, encrypted, outputOffset);
+        } catch (Exception e) {}
+        return encrypted;
     }
 
-    public boolean verifySign(byte[] data) {
-        return true;
+    public boolean verifySign(byte[] signature, byte[] plain) {
+        Signature publicSignature = null;
+        try {
+            publicSignature = Signature.getInstance("SHA1withRSA");
+            publicSignature.initVerify(publicKey);
+        } catch (Exception e) {}
+        try {
+            publicSignature.update(plain);
+            return publicSignature.verify(signature);
+        } catch (SignatureException e) {
+            return false;
+        }
     }
 }
