@@ -14,8 +14,11 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
@@ -105,6 +108,8 @@ public class LoginActivity extends AppCompatActivity {
                 //task.execute(loginField.getText().toString(),passwordField.getText().toString());
             }
         });
+
+        readKeyConfiguration();
     }
 
     private void onLogging() {
@@ -130,6 +135,30 @@ public class LoginActivity extends AppCompatActivity {
                 .setPositiveButton("OK", (dialog, which) -> dialog.dismiss());
         AlertDialog alertDialog = alertDialogBuilder.create();
         alertDialog.show();
+    }
+
+    private void readKeyConfiguration() {
+        byte[] keyBytes = null;
+        try {
+            InputStream in = getAssets().open("serwer_key-public.pem");
+            keyBytes = new byte[in.available()];
+            in.read(keyBytes);
+            in.close();
+        } catch (IOException e) {
+            showAlert(getResources().getString(R.string.keyError),"Błąd konfiguracji");
+            //use this convinient function to disable all elements
+            onLogging();
+            return;
+        }
+        try {
+            RSA.getInstance().generateKey(keyBytes);
+        }
+        catch (Exception e) {
+            showAlert(getResources().getString(R.string.keyError),"Błąd konfiguracji");
+            //use this convinient function to disable all elements
+            onLogging();
+            return;
+        }
     }
 
     private boolean readServerConfiguration() {

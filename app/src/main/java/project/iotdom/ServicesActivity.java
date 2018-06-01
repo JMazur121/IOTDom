@@ -2,6 +2,7 @@ package project.iotdom;
 
 import android.arch.lifecycle.ViewModelProviders;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Handler;
 import android.support.v7.app.AlertDialog;
@@ -22,6 +23,7 @@ import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.List;
 
 import project.iotdom.connection.AbstractMessage;
 import project.iotdom.connection.ClientSocket;
@@ -31,11 +33,16 @@ import project.iotdom.model.Service;
 import project.iotdom.model.ServicesListModel;
 import project.iotdom.packets.AbstractPacket;
 import project.iotdom.packets.DescPacket;
+import project.iotdom.packets.EotPacket;
+import project.iotdom.packets.GetPacket;
 import project.iotdom.packets.NakPacket;
 import project.iotdom.packets.SSIDPacket;
 import project.iotdom.packets.ServicesPacket;
+import project.iotdom.packets.SetPacket;
 import project.iotdom.packets.ValPacket;
+import project.iotdom.views.AnalogOutViewHolder;
 import project.iotdom.views.ComplexAdapter;
+import project.iotdom.views.DigitalOutViewHolder;
 
 public class ServicesActivity extends AppCompatActivity {
 
@@ -94,12 +101,33 @@ public class ServicesActivity extends AppCompatActivity {
         refresh.setOnClickListener(v -> {
             if (model.getServices().isEmpty())
                 return;
+            blockButtons(false);
+            servicesView.setEnabled(false);
+            refreshBar.setVisibility(View.VISIBLE);
+            GetBulkTask task = new GetBulkTask(model.getSSID());
+            Thread thread = new Thread(task);
+            thread.start();
         });
 
         logout = (Button)findViewById(R.id.logOutButton);
         logout.setOnClickListener(v -> {
-
+            blockButtons(false);
+            servicesView.setEnabled(false);
+            logoutBar.setVisibility(View.VISIBLE);
         });
+    }
+
+    private void closeDialog(String message, String title) {
+        AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(context);
+        alertDialogBuilder.setTitle(title)
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton("Ok", (dialog, which) -> {
+                    dialog.dismiss();
+                    finish();
+                });
+        AlertDialog alertDialog = alertDialogBuilder.create();
+        alertDialog.show();
     }
 
     private void notifyAdapterAtPosition(int position) {
@@ -108,20 +136,6 @@ public class ServicesActivity extends AppCompatActivity {
 
     private void notifyAdapterNewSet() {
         adapter.notifyDataSetChanged();
-    }
-
-    private void setBarState(boolean visible, ProgressBar bar) {
-        if (visible)
-            bar.setVisibility(View.VISIBLE);
-        else
-            bar.setVisibility(View.GONE);
-    }
-
-    private void setButtonState(boolean clickable, Button button) {
-        if (clickable)
-            button.setEnabled(true);
-        else
-            button.setEnabled(false);
     }
 
     private void blockButtons(boolean enabled) {
@@ -148,27 +162,64 @@ public class ServicesActivity extends AppCompatActivity {
         notifyAdapterNewSet();
     }
 
-    private Service getService(int position) {
-        return model.getService(position);
+    private void newValuesList(ArrayList<ValPacket> list) {
+        for (ValPacket packet : list) {
+            int pos = model.findServiceByID(packet.getServiceID());
+            if (pos >= 0) {
+                if (model.getService(pos).isInBoundary(packet.getValue()))
+                    model.setValAtPos(packet.getValue(), pos);
+            }
+        }
+        notifyAdapterNewSet();
     }
 
     private void setValAtService(float val, int position) {
         model.setValAtPos(val, position);
+        notifyAdapterAtPosition(position);
     }
 
     //handler for reading button
     public void readButtonHandler(View v) {
-
+        int position = servicesView.getChildAdapterPosition(v);
+        Service service = model.getService(position);
+        GetTask task = new GetTask(model.getSSID(), service, position);
+        Thread thread = new Thread(task);
+        thread.start();
     }
 
     //handler for setting button
     public void setButtonHandler(View v) {
-
+        int position = servicesView.getChildAdapterPosition(v);
+        RecyclerView.ViewHolder holder = servicesView.findContainingViewHolder(v);
+        if ((holder != null) && (holder.getItemViewType() == Service.ANALOG_OUT)) {
+            AnalogOutViewHolder analog = (AnalogOutViewHolder)holder;
+            float val;
+            try {
+                val = Float.parseFloat(analog.getValueToSet().getText().toString());
+                Service service = model.getService(position);
+                if (service.isInBoundary(val)) {
+                    SetTask task = new SetTask(model.getSSID(), position, service.getServiceID(), val);
+                    Thread thread = new Thread(task);
+                    thread.start();
+                }
+            }
+            catch (Exception e) { }
+        }
     }
 
     //handler for switch click
     public void setSwitchHandler(View v) {
-
+        int position = servicesView.getChildAdapterPosition(v);
+        RecyclerView.ViewHolder holder = servicesView.findContainingViewHolder(v);
+        if ((holder != null) && (holder.getItemViewType() == Service.DIGITAL_OUT)) {
+            DigitalOutViewHolder digital = (DigitalOutViewHolder)holder;
+            float toSet;
+            Service service = model.getService(position);
+            toSet = digital.getValueToSet().isChecked() ? 1.0f : 0.0f;
+            SetTask task = new SetTask(model.getSSID(), position, service.getServiceID(), toSet);
+            Thread thread = new Thread(task);
+            thread.start();
+        }
     }
 
     private void cleanAfterError(String message, String title, ClientSocket socket) {
@@ -193,19 +244,6 @@ public class ServicesActivity extends AppCompatActivity {
         return clientSocket;
     }
 
-
-    class ToastRun implements Runnable {
-
-        private String message;
-        public ToastRun(String message) {
-            this.message = message;
-        }
-        @Override
-        public void run() {
-            Toast.makeText(context,message,Toast.LENGTH_SHORT).show();
-        }
-    }
-
     class AlertRun implements Runnable {
         private String msg;
         private String title;
@@ -217,6 +255,22 @@ public class ServicesActivity extends AppCompatActivity {
         @Override
         public void run() {
             showAlert(msg,title);
+        }
+    }
+
+    private class UnblockView implements Runnable {
+
+        private ProgressBar bar;
+
+        public UnblockView(ProgressBar bar) {
+            this.bar = bar;
+        }
+
+        @Override
+        public void run() {
+            blockButtons(true);
+            servicesView.setEnabled(true);
+            bar.setVisibility(View.GONE);
         }
     }
 
@@ -234,7 +288,7 @@ public class ServicesActivity extends AppCompatActivity {
         public void run() {
             clientSocket = connectionTrial();
             if (clientSocket == null) {
-                handler.post(new UnblockView());
+                handler.post(new UnblockView(getBar));
             }
             //send request with ssid
             AbstractMessage message = MessageProvider.buildMessage(new ServicesPacket(), SSID);
@@ -247,9 +301,11 @@ public class ServicesActivity extends AppCompatActivity {
                 if (packet.getPacketHeader() == AbstractPacket.HEADER_NAK) {
                     NakPacket nakPacket = (NakPacket) packet;
                     //wrong session id
-                    //todo
                     if (nakPacket.getVal() == (byte) 0x00) {
-                        //show infromation about wrong ssid and close activity to get back to the logging activity
+                        clientSocket.close();
+                        handler.post(() -> {
+                            closeDialog(getResources().getString(R.string.wrongSSID),"Niepoprawne SSID");
+                        });
                         return;
                     }
                     //nak packet with wrong value
@@ -306,7 +362,7 @@ public class ServicesActivity extends AppCompatActivity {
                 //data is fine
                 else {
                     clientSocket.close();
-                    handler.post(new UnblockView());
+                    handler.post(new UnblockView(getBar));
                     handler.post(() -> {newServicesList(services);});
                     return;
                 }
@@ -316,33 +372,65 @@ public class ServicesActivity extends AppCompatActivity {
         }
 
         private void cleanAndUnblock(String message, String title) {
-            handler.post(new UnblockView());
+            handler.post(new UnblockView(getBar));
             cleanAfterError(message,title,clientSocket);
         }
 
-        private class UnblockView implements Runnable {
-            @Override
-            public void run() {
-                blockButtons(true);
-                servicesView.setEnabled(true);
-                getBar.setVisibility(View.GONE);
-            }
-        }
     }
 
     class GetTask implements Runnable {
 
         private byte SSID;
-        private byte serviceID;
+        private Service service;
+        private int position;
 
-        public GetTask(byte SSID, byte serviceID) {
+        private ClientSocket clientSocket = null;
+
+        public GetTask(byte SSID, Service service, int position) {
             this.SSID = SSID;
-            this.serviceID = serviceID;
+            this.service = service;
+            this.position = position;
         }
 
         @Override
         public void run() {
-
+            clientSocket = connectionTrial();
+            if (clientSocket == null) {
+                return;
+            }
+            GetPacket getPacket = new GetPacket(service.getServiceID());
+            AbstractMessage message = MessageProvider.buildMessage(getPacket, SSID);
+            if (clientSocket.writeToSocket(message.getBytes())) {
+                AbstractPacket packet = MessageReceiver.decryptedPacket(clientSocket);
+                if (packet == null)
+                    cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź",clientSocket);
+                else if ((packet.getPacketHeader() != AbstractPacket.HEADER_NAK) && (packet.getPacketHeader() != AbstractPacket.HEADER_VAL))
+                    cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź",clientSocket);
+                else if (packet.getPacketHeader() == AbstractPacket.HEADER_VAL) {
+                    clientSocket.close();
+                    ValPacket valPacket = (ValPacket)packet;
+                    if ((service.getServiceID() != valPacket.getServiceID()) || (!service.isInBoundary(valPacket.getValue())))
+                        cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź",clientSocket);
+                    //correct answer
+                    handler.post(() -> { setValAtService(valPacket.getValue(), position);});
+                }
+                else {//nak packet
+                    NakPacket nakPacket = (NakPacket)packet;
+                    if (nakPacket.getVal() == (byte)0x00) {
+                        clientSocket.close();
+                        handler.post(() -> {
+                            closeDialog(getResources().getString(R.string.wrongSSID),"Niepoprawne SSID");
+                        });
+                    }
+                    else if (nakPacket.getVal() == (byte)0x01) {
+                        cleanAfterError(getResources().getString(R.string.serviceUnavailible),"Usługa niedostępna",clientSocket);
+                    }
+                    else
+                        cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź",clientSocket);
+                }
+            }
+            else
+                cleanAfterError(getResources().getString(R.string.writingError),"Błąd wysyłania",clientSocket);
         }
     }
 
@@ -350,25 +438,141 @@ public class ServicesActivity extends AppCompatActivity {
 
         private byte SSID;
 
+        ClientSocket clientSocket = null;
+
+        public GetBulkTask(byte SSID) {
+            this.SSID = SSID;
+        }
+
         @Override
         public void run() {
+            clientSocket = connectionTrial();
+            if (clientSocket == null) {
+                handler.post(new UnblockView(refreshBar));
+            }
+            GetPacket getPacket = new GetPacket((byte)0x00);
+            AbstractMessage message = MessageProvider.buildMessage(getPacket, SSID);
+            if (clientSocket.writeToSocket(message.getBytes())) {
+                AbstractPacket packet = MessageReceiver.decryptedPacket(clientSocket);
+                if (packet == null) {
+                    cleanAndUnblock(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                }
+                else if (packet.getPacketHeader() == AbstractPacket.HEADER_NAK) {
+                    NakPacket nakPacket = (NakPacket)packet;
+                    if (nakPacket.getVal() == (byte)0x00) {
+                        clientSocket.close();
+                        handler.post(() -> {
+                            closeDialog(getResources().getString(R.string.wrongSSID),"Niepoprawne SSID");
+                        });
+                    }
+                    else
+                        cleanAndUnblock(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                }
+                else if (packet.getPacketHeader() == AbstractPacket.HEADER_VAL) {
+                    //start building a list of values
+                    int received = 1;
+                    boolean transmission = true;
+                    boolean failure = false;
+                    ArrayList<ValPacket> values = new ArrayList<>();
+                    ValPacket valPacket = (ValPacket)packet;
+                    values.add(valPacket);
+                    while (transmission && (received < 255)) {
+                        AbstractPacket p1 = MessageReceiver.decryptedPacket(clientSocket);
+                        if ((p1 == null) || ((p1.getPacketHeader() != AbstractPacket.HEADER_VAL) && (p1.getPacketHeader() != AbstractPacket.HEADER_EOT))) {
+                            transmission = false;
+                            failure = true;
+                        }
+                        else if (p1.getPacketHeader() == AbstractPacket.HEADER_EOT) {
+                            transmission = false;
+                            failure = false;
+                        }
+                        else {
+                            ValPacket valPacket1 = (ValPacket)p1;
+                            values.add(valPacket1);
+                            received++;
+                        }
+                    }
+                    if (failure) {
+                        cleanAndUnblock(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                    }
+                    //data is fine
+                    else {
+                        clientSocket.close();
+                        handler.post(new UnblockView(refreshBar));
+                        handler.post(() -> {newValuesList(values);});
+                    }
+                }
+                else {
+                    cleanAndUnblock(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                }
+            }
+            else
+                cleanAndUnblock(getResources().getString(R.string.writingError),"Błąd wysyłania");
+        }
 
+        private void cleanAndUnblock(String message, String title) {
+            handler.post(new UnblockView(refreshBar));
+            cleanAfterError(message,title,clientSocket);
         }
     }
 
     class SetTask implements Runnable {
 
         private byte SSID;
+        private int position;
         private byte serviceID;
+        private float valueToSet;
 
-        public SetTask(byte SSID, byte serviceID) {
+        private ClientSocket clientSocket = null;
+
+        public SetTask(byte SSID, int position, byte serviceID, float valueToSet) {
             this.SSID = SSID;
+            this.position = position;
             this.serviceID = serviceID;
+            this.valueToSet = valueToSet;
         }
 
         @Override
         public void run() {
+            clientSocket = connectionTrial();
+            if (clientSocket == null) {
+                handler.post(() -> { notifyAdapterAtPosition(position);});
+                return;
+            }
+            SetPacket setPacket = new SetPacket(serviceID, valueToSet);
+            AbstractMessage message = MessageProvider.buildMessage(setPacket, SSID);
+            if (clientSocket.writeToSocket(message.getBytes())) {
+                AbstractPacket packet = MessageReceiver.decryptedPacket(clientSocket);
+                if (packet == null)
+                    clean(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                else if ((packet.getPacketHeader() != AbstractPacket.HEADER_NAK) && (packet.getPacketHeader() != AbstractPacket.HEADER_ACK))
+                    clean(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                else if (packet.getPacketHeader() == AbstractPacket.HEADER_ACK) {
+                    clientSocket.close();
+                    handler.post(() -> { setValAtService(valueToSet, position);});
+                }
+                else {//nak packet
+                    NakPacket nakPacket = (NakPacket)packet;
+                    if (nakPacket.getVal() == (byte)0x00) {
+                        clientSocket.close();
+                        handler.post(() -> {
+                            closeDialog(getResources().getString(R.string.wrongSSID),"Niepoprawne SSID");
+                        });
+                    }
+                    else if (nakPacket.getVal() == (byte)0x01) {
+                        clean(getResources().getString(R.string.serviceUnavailible),"Usługa niedostępna");
+                    }
+                    else
+                        clean(getResources().getString(R.string.serverResponseError), "Błędna odpowiedź");
+                }
+            }
+            else
+                clean(getResources().getString(R.string.writingError),"Błąd wysyłania");
+        }
 
+        private void clean(String message, String title) {
+            cleanAfterError(message, title, clientSocket);
+            handler.post(() -> { notifyAdapterAtPosition(position);});
         }
     }
 
@@ -380,9 +584,41 @@ public class ServicesActivity extends AppCompatActivity {
             this.SSID = SSID;
         }
 
+        private ClientSocket clientSocket = null;
+
         @Override
         public void run() {
-
+            clientSocket = connectionTrial();
+            if (clientSocket == null) {
+                handler.post(() -> {
+                    closeDialog("Nie można połączyć się z serwerem. Aktywność zostanie zamknięta","Błąd połączenia");
+                });
+            }
+            EotPacket eotPacket = new EotPacket();
+            AbstractMessage message = MessageProvider.buildMessage(eotPacket, SSID);
+            if (clientSocket.writeToSocket(message.getBytes())) {
+                AbstractPacket packet = MessageReceiver.decryptedPacket(clientSocket);
+                if ((packet == null)) {
+                    handler.post(() -> {
+                        closeDialog("Nie uzyskano odpowiedzi od serwera. Aktywność zostanie zamknięta","Błędna odpowiedź");
+                    });
+                }
+                else if (packet.getPacketHeader() != AbstractPacket.HEADER_ACK) {
+                    handler.post(() -> {
+                       closeDialog("Niepoprawna odpowiedź serwera. Aktywność zostanie zamknięta","Błędna odpowiedź");
+                    });
+                }
+                else {
+                    handler.post(() -> {
+                       closeDialog("Nastąpiło wylogowanie", "Wylogowano");
+                    });
+                }
+            }
+            else {
+                handler.post(() -> {
+                    closeDialog("Nie można skontaktować się z serwerem. Aktywność zostanie zamknięta","Błąd wysyłania");
+                });
+            }
         }
     }
 }

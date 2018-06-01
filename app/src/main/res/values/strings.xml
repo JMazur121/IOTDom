@@ -23,4 +23,7 @@
     <string name="toSet">Wartość do ustawienia</string>
     <string name="maxValue">Wartość maksymalna</string>
     <string name="minValue">Wartość minimalna</string>
+    <string name="wrongSSID">Niepoprawne SSID</string>
+    <string name="serviceUnavailible">Ta usługa nie jest obecnie dostępna</string>
+    <string name="keyError">Nie można odczytać certyfikatu serwera</string>
 </resources>

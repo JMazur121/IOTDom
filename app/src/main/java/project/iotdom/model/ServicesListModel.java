@@ -29,6 +29,14 @@ public class ServicesListModel extends ViewModel {
         return SSID;
     }
 
+    public int findServiceByID(byte id) {
+        for (int i=0; i<services.size(); i++) {
+            if (services.get(i).getServiceID() == id)
+                return i;
+        }
+        return -1;
+    }
+
     public void addAll(List<Service> toAdd) {
         services.addAll(toAdd);
     }
