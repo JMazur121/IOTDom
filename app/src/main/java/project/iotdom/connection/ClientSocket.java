@@ -1,11 +1,14 @@
 package project.iotdom.connection;
 
+import android.util.Log;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketException;
 
 public class ClientSocket {
 
@@ -41,8 +44,15 @@ public class ClientSocket {
         int bytes = -1;
         try {
             socket.setSoTimeout(readTimeout);
+            Log.i("Timeot","Ustawilem timeout");
             bytes = inputStream.read(destination,offset,bytesToRead);
-        } catch (Exception e) { }
+            Log.i("read","zrobilem czytanie");
+        } catch (SocketException se) {
+            Log.i("wyjatek","zlapalem socketexception w czytaniu");
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            Log.i("wyjatek2","Zlapalem io exception");
+        }
         return bytes;
     }
 

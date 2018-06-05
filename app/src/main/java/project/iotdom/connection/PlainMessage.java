@@ -26,7 +26,14 @@ public class PlainMessage extends AbstractMessage {
         else if (packet.getPacketHeader() == AbstractPacket.HEADER_KEY) {
             RSA rsa = RSA.getInstance();
             // don't encrypt header
-            byte[] encrypted = rsa.encryptData(packet.getPacketBytes(),1);
+
+            byte[] keyBytes = packet.getPacketBytes();
+            ByteBuffer toPad = ByteBuffer.allocate(256);
+            toPad.order(ByteOrder.LITTLE_ENDIAN);
+            toPad.put(keyBytes,1,16);
+            byte[] zeros = new byte[240];
+            toPad.put(zeros);
+            byte[] encrypted = rsa.encryptData(toPad.array(),0);
             ByteBuffer buffer = ByteBuffer.allocate(4 + 1 + 257);
             buffer.order(ByteOrder.LITTLE_ENDIAN);
             buffer.putInt(257);

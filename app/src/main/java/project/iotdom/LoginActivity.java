@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
+import java.util.Arrays;
 
 import project.iotdom.connection.AbstractMessage;
 import project.iotdom.connection.ClientSocket;
@@ -110,6 +111,14 @@ public class LoginActivity extends AppCompatActivity {
         });
 
         readKeyConfiguration();
+        /**
+        byte[] key = AES.getInstance().getKey();
+        Log.i("seskey",AbstractMessage.bytesToHexString(key));
+
+        KeyPacket keyPacket = new KeyPacket(AES.getInstance().getKey());
+        AbstractMessage msg = MessageProvider.buildMessage(keyPacket,(byte)0);
+        Log.i("rsaseskey",AbstractMessage.bytesToHexString(msg.getBytes()));
+         **/
     }
 
     private void onLogging() {
@@ -139,11 +148,17 @@ public class LoginActivity extends AppCompatActivity {
 
     private void readKeyConfiguration() {
         byte[] keyBytes = null;
+        byte[] keyBytes2 = null;
         try {
             InputStream in = getAssets().open("serwer_key-public.pem");
             keyBytes = new byte[in.available()];
             in.read(keyBytes);
             in.close();
+
+            InputStream in2 = getAssets().open("serwer_key-private.pem");
+            keyBytes2 = new byte[in2.available()];
+            in2.read(keyBytes2);
+            in2.close();
         } catch (IOException e) {
             showAlert(getResources().getString(R.string.keyError),"Błąd konfiguracji");
             //use this convinient function to disable all elements
@@ -152,6 +167,7 @@ public class LoginActivity extends AppCompatActivity {
         }
         try {
             RSA.getInstance().generateKey(keyBytes);
+            RSA.getInstance().generatePrivateKey(keyBytes2);
         }
         catch (Exception e) {
             showAlert(getResources().getString(R.string.keyError),"Błąd konfiguracji");
@@ -218,26 +234,47 @@ public class LoginActivity extends AppCompatActivity {
 
             if (challengeExchange()) {
                 KeyPacket keyPacket = new KeyPacket(AES.getInstance().getKey());
+
+                byte[] key = AES.getInstance().getKey();
+                Log.i("seskey",AbstractMessage.bytesToHexString(key));
+
                 AbstractMessage msg = MessageProvider.buildMessage(keyPacket,(byte)0);
+                Log.i("rsaseskey",AbstractMessage.bytesToHexString(msg.getBytes()));
                 if (clientSocket.writeToSocket(msg.getBytes())) {
                     AbstractPacket packet = MessageReceiver.decryptedPacket(clientSocket);
-                    if ((packet == null) || (packet.getPacketHeader() != AbstractPacket.HEADER_ACK)) {
+                    Log.i("ssid","Odbieram ssid");
+                    if ((packet == null) || (packet.getPacketHeader() != AbstractPacket.HEADER_SSID)) {
                         cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędne dane");
                         return;
                     }
+                    byte ssid = ((SSIDPacket)packet).getSsid();
+                    Log.i("ssidok","Odebralem ssid : "+String.valueOf(ssid));
                     //send login data
-                    msg = MessageProvider.buildMessage(buildLogPacket(),(byte)0);
+                    Log.i("logdata","Wysylam dane logowania");
+                    msg = MessageProvider.buildMessage(buildLogPacket(),ssid);
                     if (clientSocket.writeToSocket(msg.getBytes())) {
+                        Log.i("logresp","Probuje odebrac odpowiedz na logowanie");
                         packet = MessageReceiver.decryptedPacket(clientSocket);
-                        if ((packet == null) || (packet.getPacketHeader() != AbstractPacket.HEADER_SSID)) {
+                        if (packet == null) {
                             cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędne dane");
                             return;
                         }
-                        //data is fine, open new Activity
-                        clientSocket.close();
-                        handler.post(LoginActivity.this::afterLogin);
-                        OpenServicesActivity servicesActivity = new OpenServicesActivity((SSIDPacket) packet);
-                        handler.post(servicesActivity);
+                        else if (packet.getPacketHeader() == AbstractPacket.HEADER_NAK) {
+                            cleanAfterError(getResources().getString(R.string.wrong_login_data), "Błędne informacje logowania");
+                            return;
+                        }
+                        else if (packet.getPacketHeader() == AbstractPacket.HEADER_ACK) {
+                            Log.i("logok","Poprawnie zalogowano. Zaczynam nowa aktywnosc");
+                            //data is fine, open new Activity
+                            clientSocket.close();
+                            handler.post(LoginActivity.this::afterLogin);
+                            OpenServicesActivity servicesActivity = new OpenServicesActivity(ssid);
+                            handler.post(servicesActivity);
+                        }
+                        else {
+                            cleanAfterError(getResources().getString(R.string.serverResponseError), "Błędne dane");
+                            return;
+                        }
                     }//writing error
                 }//writing error
                 cleanAfterError(getResources().getString(R.string.writingError),"Błąd wysyłania");
@@ -258,6 +295,7 @@ public class LoginActivity extends AppCompatActivity {
         }
 
         private boolean challengeExchange() {
+            Log.i("Chall_start","wchodze");
             AbstractPacket challenge = new ChallPacket();
             AbstractMessage msg = MessageProvider.buildMessage(challenge,(byte)0);
             if (clientSocket.writeToSocket(msg.getBytes())) {
@@ -266,7 +304,8 @@ public class LoginActivity extends AppCompatActivity {
                     handler.post(new AlertRun(getResources().getString(R.string.serverResponseError),"Błędna odpowiedź"));
                     return false;
                 }
-                return RSA.getInstance().verifySign(packet.getPacketBytes());
+                Log.i("signverify","Testuje podpis");
+                return RSA.getInstance().verifySign(packet.getPacketBytes(), Arrays.copyOfRange(challenge.getPacketBytes(),1,challenge.getPacketBytes().length));
             }
             else {
                 handler.post(new AlertRun(getResources().getString(R.string.writingError), "Błąd wysyłania"));
@@ -275,16 +314,16 @@ public class LoginActivity extends AppCompatActivity {
         }
 
         public class OpenServicesActivity implements Runnable {
-            private SSIDPacket packet;
+            private byte ssid;
 
-            public OpenServicesActivity(SSIDPacket packet) {
-                this.packet = packet;
+            public OpenServicesActivity(byte ssid) {
+                this.ssid = ssid;
             }
 
             @Override
             public void run() {
                 Intent intent = new Intent(context,ServicesActivity.class);
-                intent.putExtra(PASS_SSID, packet.getSsid());
+                intent.putExtra(PASS_SSID, ssid);
                 intent.putExtra(PASS_HOST, adress.getHostAddress());
                 intent.putExtra(PASS_PORT, portNumber);
                 startActivity(intent);
